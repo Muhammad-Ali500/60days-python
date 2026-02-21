@@ -1,5 +1,3 @@
-import os
-
 with open("sales.csv", "r") as file:
     content = file.read()
 
