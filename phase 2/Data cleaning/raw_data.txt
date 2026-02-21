@@ -1,0 +1,21 @@
+id,product,category,quantity,price,date,discount
+1, Laptop ,Electronics,2,900,2026-02-01,10
+2,Mouse,Electronics,,20,2026-02-01,5
+3,Keyboard,Electronics,3,,2026-02-02,0
+4,Laptop ,Electronics,2,900,2026-02-02,10
+5,Monitor,Electronics,1,300,2026-02-03,0
+6,Mouse,Electronics,abc,20,2026-02-03,5
+7,Keyboard ,Electronics,4,50,2026-02-04,0
+8,Laptop,Electronics,1,900,2026-02-04,10
+9,Chair,Furniture,2,150,2026-02-05,0
+10,Table,Furniture,1,250,2026-02-05,
+11,Sofa ,Furniture,,500,2026-02-06,20
+12,Lamp,Furniture,3,xyz,2026-02-06,0
+13,Laptop,Electronics,2,900,2026-02-01,10
+14,Mouse,Electronics,7,20,2026-02-07,5
+15,Desk,Furniture,1,200,2026-02-07,0
+16,Keyboard,Electronics,,50,2026-02-08,0
+17,Laptop,Electronics,1,,2026-02-08,10
+18,Chair,Furniture,2,150,2026-02-09,0
+19,Monitor,Electronics,1,300,2026-02-09,0
+20,Mouse,Electronics,5,20,2026-02-10,5
