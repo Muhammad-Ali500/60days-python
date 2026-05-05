@@ -1,0 +1,140 @@
+version: "3.9"
+
+services:
+  # ─────────────────────────────────────────
+  # PostgreSQL Database
+  # ─────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: jobflow_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: jobflow
+      POSTGRES_PASSWORD: jobflow_secret
+      POSTGRES_DB: jobflow_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"        # exposed for local debugging; remove in prod
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jobflow -d jobflow_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─────────────────────────────────────────
+  # Redis  (broker + cache + celery backend)
+  # ─────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: jobflow_redis
+    restart: unless-stopped
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"        # exposed for local debugging; remove in prod
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─────────────────────────────────────────
+  # FastAPI Backend
+  # ─────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: jobflow_backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://jobflow:jobflow_secret@postgres:5432/jobflow_db
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      SECRET_KEY: change_me_in_production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app   # hot-reload in dev; remove volume mount in prod
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # ─────────────────────────────────────────
+  # Celery Worker
+  # Same image as backend — just different CMD
+  # ─────────────────────────────────────────
+  celery_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: jobflow_worker
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://jobflow:jobflow_secret@postgres:5432/jobflow_db
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=2
+
+  # ─────────────────────────────────────────
+  # Celery Flower  (monitoring UI for queues)
+  # ─────────────────────────────────────────
+  flower:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: jobflow_flower
+    restart: unless-stopped
+    environment:
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+    depends_on:
+      - redis
+    ports:
+      - "5555:5555"
+    command: celery -A app.workers.celery_app flower --port=5555
+
+  # ─────────────────────────────────────────
+  # React Frontend
+  # ─────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: jobflow_frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+  # ─────────────────────────────────────────
+  # Nginx Reverse Proxy
+  # Routes /api → backend, / → frontend
+  # ─────────────────────────────────────────
+  nginx:
+    image: nginx:alpine
+    container_name: jobflow_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - backend
+      - frontend
+
+volumes:
+  postgres_data:
